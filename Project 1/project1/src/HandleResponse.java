@@ -1,43 +1,41 @@
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 
+/**
+ * 
+ * The thread runnable to read the response from the server and send it to the client
+ * 
+ * @author Sarah Whelan
+ *
+ */
 public class HandleResponse implements Runnable {
-	private Socket getResponseFrom;
-	private Socket sendResponseTo;
+	private Socket server;
+	private Socket client;
 
-	public HandleResponse(Socket getResponseFrom, Socket sendResponseTo){
-		this.getResponseFrom = getResponseFrom;
-		this.sendResponseTo = sendResponseTo;
+	public HandleResponse(Socket server, Socket client){
+		this.server = server;
+		this.client = client;
 	}
 
+	/**
+	 * Gets the response from the server and passes it back to the client.
+	 */
 	@Override
 	public void run() {
 		try{
 			// Get response from server
-			BufferedReader is = new BufferedReader(new InputStreamReader(getResponseFrom.getInputStream()));
-			String isLine;
-			StringBuilder builder = new StringBuilder();
-			while ((isLine = is.readLine()) != null){
-				builder.append(isLine + "\r\n");
-				if(isLine.contains("Connection:")){
-					isLine = "Connection: keep-alive";
-				}
+			InputStream in = server.getInputStream();
+			int inputByte;
+			// Open client's output stream
+			PrintWriter out = new PrintWriter(client.getOutputStream());
+			while ((byte)(inputByte = in.read()) != -1 && in != null && !server.isClosed()){
+				// Immediately send each byte to the client
+				out.write((byte) inputByte);
+				out.flush();
 			}
-			builder.append("\r\n");
-
-			// Send response to client
-			PrintWriter out = new PrintWriter(sendResponseTo.getOutputStream());
-			//System.out.println(builder.toString());
-			out.write(builder.toString());
-			out.flush();
-			//out.close();
-			//is.close();
-			sendResponseTo.close();
 		} catch (Exception e){
 			e.printStackTrace();
-			System.out.println("Exception sdlkfjdsf");
 		}
 	}
 
