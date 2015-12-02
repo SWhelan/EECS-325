@@ -70,7 +70,7 @@ def measure_info(destination):
         # Stop the timer
         end_time = time.clock()
     except socket.error:
-        print "%s did not respond." % (destination)        
+        print "%s did not respond or the packet was lost." % (destination)        
         return
     finally:
         # Close the sockets
@@ -132,6 +132,7 @@ f = open('targets.txt', 'r')
 # For every target
 for line in f:
     # measure the hops/ get info for that target
-    measure_info(line.split()[0])
+    if not line.startswith("#"):
+        measure_info(line.split()[0])
 # Close the target file
 f.close()
