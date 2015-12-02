@@ -32,6 +32,7 @@ def measure_info(destination):
     # Bind the receiving socket to localhost/symbolic empty string on same port
     receiver.bind(("", port))
     
+    
     # Set receiver to non-blocking to enable error handling if no response
     receiver.setblocking(0)
     
@@ -64,7 +65,7 @@ def measure_info(destination):
         
     # If we didn't get a response exit
     if tries == max_tries:
-        print "%s unreachable." % (max_tries, destination)
+        print "%s did not respond." % (destination)
     else:
         # Process the data and determine how many hops the packet travelled
         #for i in range(len(data)):
@@ -101,7 +102,6 @@ f = open('targets.txt', 'r')
 # For every target
 for line in f:
     # measure the hops/ get info for that target
-    if line[0:1] != "#":
-        measure_info(line.split()[0])
+    measure_info(line.split()[0])
 # Close the target file
 f.close()
