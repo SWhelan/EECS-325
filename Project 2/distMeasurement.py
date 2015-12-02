@@ -25,19 +25,23 @@ def get_local_ip():
 def make_string_ip(ip):
     return str(ord(ip[0])) + "." + str(ord(ip[1])) + "." + str(ord(ip[2])) + "." + str(ord(ip[3]))
     
-def bytes_match_string(bytes, string):
+def do_bytes_match_string(bytes, string):
     return bytes[:].decode("ascii") == string
 
 def measure_info(destination):
     # The official traceroute port should return port unreachable ICMP packets/messages
-    port = 33434
-    # Get the expected protocols on the sockets
+    # Other ports would work as well ie 49152 through 65535 and really any normally unused port
+    # https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers#Dynamic.2C_private_or_ephemeral_ports
+    port = 33434    
+    # Get the expected protocols for the sockets
     icmp = socket.getprotobyname('icmp')
     udp = socket.getprotobyname('udp')
     # A known ttl 
     ttl = 32
     # A known message
     message = "abcdefgh"
+    # Get the destination IP - non-deterministic gets first DNS response
+    destination_ip = socket.gethostbyname(destination)
     
     # Create sockets 
     
@@ -53,11 +57,7 @@ def measure_info(destination):
     # Set the blocking receiver to time out if no response
     receiver.settimeout(3)
     
-    # Get the destination IP - non-deterministic gets first DNS response
-    destination_ip = socket.gethostbyname(destination)
-    
     # Start a timer to get RTT
-    end_time = 0
     start_time = time.clock()
     
     # Send the packet to the destination
@@ -78,6 +78,7 @@ def measure_info(destination):
         receiver.close()
         
     # Process the data and determine how many hops the packet travelled
+    
     # The first 20 bytes of the response 0 - 19 is the containing IPv4 header
     # The next 8 are the ICMP response 20-27
     # Specifically byte 20 is the type should be 3 for destination unreachable
@@ -108,16 +109,17 @@ def measure_info(destination):
             # The destination IP on the ICMP packet is not this address
             icmp_destination_ip != get_local_ip() or
             # The ICMP packet returned my message and it doesn't match
-            (len(data) == 64 and not bytes_match_string(data[len(data)-8:], message))
+            (len(data) == 64 and not do_bytes_match_string(data[len(data)-8:], message))
         ):
         print "Did not receive expected response for host %s." % (destination)
         return
         
     hop_count = ttl - new_ttl
-    print "There were %d hops to get to %s" % (hop_count, destination)
+    print "Data for host: %s (%s)" % (destination, destination_ip)
+    print "Hops: %d" % (hop_count)
     time_in_sec = end_time - start_time
     time_in_micro_sec = time_in_sec * 1000 * 1000
-    print "RTT in micro seconds: ", time_in_micro_sec
+    print "RTT (micro seconds): %d"  % (time_in_micro_sec)
     
     return hop_count, time_in_micro_sec
     
