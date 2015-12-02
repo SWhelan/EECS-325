@@ -8,19 +8,40 @@ import socket
 import sys
 import time
 
+def get_local_ip():
+    # Second answer:
+    # http://stackoverflow.com/questions/166506/finding-local-ip-addresses-using-pythons-stdlib
+    # but that answer probably got it from here:
+    # http://zeth.net/archive/2007/11/24/how-to-find-out-ip-address-in-python/
+    # which I believe indicates someone posted it on a mailing list
+    # Either way I ended up trying the first answer from first link and only getting 127.0.0.1
+    
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("case.edu", 80))
+    local_ip = s.getsockname()[0]
+    s.close()
+    return local_ip
+    
+def make_string_ip(ip):
+    return str(ord(ip[0])) + "." + str(ord(ip[1])) + "." + str(ord(ip[2])) + "." + str(ord(ip[3]))
+    
+def bytes_match_string(bytes, string):
+    return bytes[:].decode("ascii") == string
+
 def measure_info(destination):
-    # The official traceroute port
+    # The official traceroute port should return port unreachable ICMP packets/messages
     port = 33434
     # Get the expected protocols on the sockets
     icmp = socket.getprotobyname('icmp')
     udp = socket.getprotobyname('udp')
     # A known ttl 
     ttl = 32
+    # A known message
+    message = "abcdefgh"
     
     # Create sockets 
     
     # One to send a packet with a known ttl 
-    # to a port that should return an ICMP Message with code 3
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, udp)
     
     # Set the TTL explicitly so that we know what it was originally
@@ -29,70 +50,77 @@ def measure_info(destination):
     # One to receive an ICMP packet ideally with code 3
     receiver = socket.socket(socket.AF_INET, socket.SOCK_RAW, icmp)
     
-    # Bind the receiving socket to localhost/symbolic empty string on same port
-    receiver.bind(("", port))
+    # Set the blocking receiver to time out if no response
+    receiver.settimeout(3)
     
-    
-    # Set receiver to non-blocking to enable error handling if no response
-    receiver.setblocking(0)
+    # Get the destination IP - non-deterministic gets first DNS response
+    destination_ip = socket.gethostbyname(destination)
     
     # Start a timer to get RTT
     end_time = 0
     start_time = time.clock()
     
     # Send the packet to the destination
-    sender.sendto("abcdefgh", (destination, port))
+    sender.sendto(message, (destination_ip, port))
     
     # Attempt to get the data from the receiver by polling
-    finished = False
-    tries = 0
-    max_tries = 5
-    while not finished and tries < max_tries:
-        try:
-            # Get data from the receiver = the argument is the buffer size
-            data, addr = receiver.recvfrom(2048)
-            # Stop the timer
-            end_time = time.clock()
-            finished = True
-        except socket.error as (errno, errmsg):
-            tries = tries + 1
-            # Wait a little bit before trying to poll again
-            time.sleep(1)
+    try:
+        # Get data from the receiver = the argument is the buffer size
+        data, addr = receiver.recvfrom(2048)
+        # Stop the timer
+        end_time = time.clock()
+    except socket.error:
+        print "%s did not respond." % (destination)        
+        return
+    finally:
+        # Close the sockets
+        sender.close()
+        receiver.close()
+        
+    # Process the data and determine how many hops the packet travelled
+    # The first 20 bytes of the response 0 - 19 is the containing IPv4 header
+    # The next 8 are the ICMP response 20-27
+    # Specifically byte 20 is the type should be 3 for destination unreachable
+    # Specifically byte 21 is the code should be 3 for port unreachable
+    # The next 20 28 - 47 bytes are the IPv4 headers sent earlier
+    # Specifically byte 36 is the ttl field indicating how many steps it took to get to the destination
+    # The last 8 48 - 55 are the data in the packet sent
     
-    # Close the sockets
-    sender.close()
-    receiver.close()
+    icmp_type = ord(data[20])
+    icmp_code = ord(data[21])
+    new_ttl = ord(data[36])
+    
+    response_source_ip = make_string_ip(data[40:44])
+    response_destination_ip = make_string_ip(data[44:48])  
+    
+    icmp_source_ip = make_string_ip(data[12:16])
+    icmp_destination_ip = make_string_ip(data[16:20])
+ 
+    if  (   
+            # The message is not ICMP destination / port unreachable
+            icmp_type != 3 or icmp_code != 3 or
+            # The source IP on the IPv4 packet within the ICMP does not match our IP
+            response_source_ip  != get_local_ip() or
+            # The destination IP on the IPv4 packet within the ICMP does not match the destination
+            response_destination_ip != destination_ip or
+            # The source IP on the ICMP packet is not the destination
+            icmp_source_ip != destination_ip or
+            # The destination IP on the ICMP packet is not this address
+            icmp_destination_ip != get_local_ip() or
+            # The ICMP packet returned my message and it doesn't match
+            (len(data) == 64 and not bytes_match_string(data[len(data)-8:], message))
+        ):
+        print "Did not receive expected response for host %s." % (destination)
+        return
         
-    # If we didn't get a response exit
-    if tries == max_tries:
-        print "%s did not respond." % (destination)
-    else:
-        # Process the data and determine how many hops the packet travelled
-        #for i in range(len(data)):
-        #   print i, "|", bin(ord(data[i]))
-        # The first 20 bytes of the response 0 - 19 is the containing IPv4 header
-        # The next 8 are the ICMP response 20-27
-        # Specifically byte 20 is the type should be 3 for destination unreachable
-        # Specifically byte 21 is the code should be 3 for port unreachable
-        # The next 20 28 - 47 bytes are the IPv4 headers sent earlier
-        # Specifically byte 36 is the ttl field indicating how many steps it took to get to the destination
-        # The last 8 48 - 55 are the data in the packet sent
-        
-        icmp_type = ord(data[20])
-        icmp_code = ord(data[21])
-        new_ttl = ord(data[36])
-        
-        if icmp_type != 3 or icmp_code != 3:
-            print "Did not receive expected response."
-        else:
-            hop_count = ttl - new_ttl
-            print "There were %d hops to get to %s" % (hop_count, destination)
-            time_in_sec = end_time - start_time
-            time_in_micro_sec = time_in_sec * 1000 * 1000
-            print "RTT in micro seconds: ", time_in_micro_sec
-            
-            return hop_count, time_in_micro_sec
-        
+    hop_count = ttl - new_ttl
+    print "There were %d hops to get to %s" % (hop_count, destination)
+    time_in_sec = end_time - start_time
+    time_in_micro_sec = time_in_sec * 1000 * 1000
+    print "RTT in micro seconds: ", time_in_micro_sec
+    
+    return hop_count, time_in_micro_sec
+    
 
 # Process Targets
     
