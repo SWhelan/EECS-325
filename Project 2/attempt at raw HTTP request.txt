@@ -1,0 +1,23 @@
+import socket
+
+def measure_distance(destination):
+    #geoServiceIP = socket.gethostbyname("freegeoip.net")
+    geoServiceIP = socket.gethostbyname("google.com")
+    udp = socket.getprotobyname('udp')
+    tcp = socket.getprotobyname('tcp')
+    #urlString = "/json/"
+    #destinationIP = socket.gethostbyname(destination)
+    #urlString += destinationIP
+    #print urlString
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, udp)
+    urlString = "google.com/"
+    req = "GET " + urlString + " HTTP/1.1\r\n" + "Host: google.com\r\n"
+    print req
+
+    
+    tcpsoc = socket.socket(socket.AF_INET, socket.SOCK_STREAM, tcp)
+    tcpsoc.connect((geoServiceIP, 80))
+    tcpsoc.send(req)
+    tcpsoc.settimeout(5)
+    response = tcpsoc.recv(2048)
+    print response[:].decode("ascii")

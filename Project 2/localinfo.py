@@ -1,3 +1,9 @@
+# Sarah Whelan
+# slw96
+# Introduction to Computer Networks
+# Project 2
+# December 2, 2015
+
 import socket
 
 def get_local_ip():

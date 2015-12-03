@@ -7,7 +7,7 @@
 import socket
 import sys
 import time
-import getLocalIP
+import localinfo
     
 def make_string_ip(ip):
     return str(ord(ip[0])) + "." + str(ord(ip[1])) + "." + str(ord(ip[2])) + "." + str(ord(ip[3]))
@@ -88,13 +88,13 @@ def measure_info(destination):
             # The message is not ICMP destination / port unreachable
             icmp_type != 3 or icmp_code != 3 or
             # The source IP on the IPv4 packet within the ICMP does not match our IP
-            response_source_ip  != getLocalIP.get_local_ip() or
+            response_source_ip  != localinfo.get_local_ip() or
             # The destination IP on the IPv4 packet within the ICMP does not match the destination
             response_destination_ip != destination_ip or
             # The source IP on the ICMP packet is not the destination
             icmp_source_ip != destination_ip or
             # The destination IP on the ICMP packet is not this address
-            icmp_destination_ip != getLocalIP.get_local_ip() or
+            icmp_destination_ip != localinfo.get_local_ip() or
             # The ICMP packet returned my message and it doesn't match
             (len(data) == 64 and not do_bytes_match_string(data[len(data)-8:], message))
         ):
