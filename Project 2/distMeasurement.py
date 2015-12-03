@@ -7,20 +7,7 @@
 import socket
 import sys
 import time
-
-def get_local_ip():
-    # Second answer:
-    # http://stackoverflow.com/questions/166506/finding-local-ip-addresses-using-pythons-stdlib
-    # but that answer probably got it from here:
-    # http://zeth.net/archive/2007/11/24/how-to-find-out-ip-address-in-python/
-    # which I believe indicates someone posted it on a mailing list
-    # Either way I ended up trying the first answer from first link and only getting 127.0.0.1
-    
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("case.edu", 80))
-    local_ip = s.getsockname()[0]
-    s.close()
-    return local_ip
+import getLocalIP
     
 def make_string_ip(ip):
     return str(ord(ip[0])) + "." + str(ord(ip[1])) + "." + str(ord(ip[2])) + "." + str(ord(ip[3]))
@@ -58,7 +45,7 @@ def measure_info(destination):
     receiver.settimeout(3)
     
     # Start a timer to get RTT
-    start_time = time.clock()
+    start_time = time.time()
     
     # Send the packet to the destination
     sender.sendto(message, (destination_ip, port))
@@ -68,7 +55,7 @@ def measure_info(destination):
         # Get data from the receiver = the argument is the buffer size
         data, addr = receiver.recvfrom(2048)
         # Stop the timer
-        end_time = time.clock()
+        end_time = time.time()
     except socket.error:
         print "%s did not respond or the packet was lost." % (destination)        
         return
@@ -101,13 +88,13 @@ def measure_info(destination):
             # The message is not ICMP destination / port unreachable
             icmp_type != 3 or icmp_code != 3 or
             # The source IP on the IPv4 packet within the ICMP does not match our IP
-            response_source_ip  != get_local_ip() or
+            response_source_ip  != getLocalIP.get_local_ip() or
             # The destination IP on the IPv4 packet within the ICMP does not match the destination
             response_destination_ip != destination_ip or
             # The source IP on the ICMP packet is not the destination
             icmp_source_ip != destination_ip or
             # The destination IP on the ICMP packet is not this address
-            icmp_destination_ip != get_local_ip() or
+            icmp_destination_ip != getLocalIP.get_local_ip() or
             # The ICMP packet returned my message and it doesn't match
             (len(data) == 64 and not do_bytes_match_string(data[len(data)-8:], message))
         ):
@@ -118,10 +105,10 @@ def measure_info(destination):
     print "Data for host: %s (%s)" % (destination, destination_ip)
     print "Hops: %d" % (hop_count)
     time_in_sec = end_time - start_time
-    time_in_micro_sec = time_in_sec * 1000 * 1000
-    print "RTT (micro seconds): %d"  % (time_in_micro_sec)
+    time_in_milli_sec = time_in_sec * 1000
+    print "RTT (milliseconds): %f"  % (time_in_milli_sec)
     
-    return hop_count, time_in_micro_sec
+    return hop_count, time_in_milli_sec
     
 
 # Process Targets
